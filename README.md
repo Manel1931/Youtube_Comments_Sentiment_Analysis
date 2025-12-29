@@ -1,4 +1,42 @@
-# End-to-end-Youtube-Sentiment first test
+# End-to-end-Youtube-Sentiment
+![MLOps](https://img.shields.io/badge/Project-MLOps-blueviolet?style=for-the-badge&logo=git)
+![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)
+![AWS](https://img.shields.io/badge/AWS-Cloud-orange?style=for-the-badge&logo=amazon-aws)
+![DVC](https://img.shields.io/badge/DVC-Data_Version_Control-white?style=for-the-badge&logo=dvc)
+
+## 👥 Team Members
+* **Manel BOUMADANE** (Project Lead & Data Engineer)
+* **Oulahcene Anissa** (Machine Learning Engineer)
+* **Ider Tilleli** (DevOps & Frontend Engineer)
+
+---
+
+## 🎯 Project Purpose
+This **YouTube Sentiment Analysis** project is a comprehensive **MLOps pipeline** designed to scrape, process, and analyze the sentiment of YouTube comments in real-time. By leveraging a custom-trained LightGBM model and a Chrome extension, users can instantly visualize audience feedback on any video. This project demonstrates the integration of data versioning with DVC, experiment tracking with MLflow, and automated cloud deployment using AWS.
+
+---
+
+## 🛠️ Tech Stack & Tools
+- **Language:** Python 3.11
+- **ML Frameworks:** LightGBM, Scikit-learn
+- **Data Versioning:** DVC (Data Version Control)
+- **Experiment Tracking:** MLflow
+- **Cloud Infrastructure:** AWS (S3, ECR, EC2)
+- **DevOps:** GitHub Actions (CI/CD), Docker
+- **Frontend:** Chrome Extension (JavaScript/HTML/CSS)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 conda create -n youtube python=3.11 -y 
@@ -112,7 +150,7 @@ https://www.youtube.com/watch?v=i_FdiQMwKiw
 
     AWS_SECRET_ACCESS_KEY=
 
-    AWS_REGION = us-east-1
+    AWS_REGION = eu-west-3
 
     AWS_ECR_LOGIN_URI = demo>>  566373416292.dkr.ecr.ap-south-1.amazonaws.com
 
