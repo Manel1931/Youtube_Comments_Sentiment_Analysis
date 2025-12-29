@@ -1,7 +1,7 @@
-# End-to-end-Youtube-Sentiment
+# End-to-end-Youtube-Sentiment first test
 
 
-conda create -n youtube python=3.11 -y
+conda create -n youtube python=3.11 -y 
 
 conda activate youtube
 
