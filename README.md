@@ -290,6 +290,8 @@ export MLFLOW_TRACKING_URI=http://your-ec2-public-ip:5000
 ## ☁️ AWS-CICD-Deployment-with-Github-Actions
 * Login to AWS console.
 * Create IAM user for deployment
+
+
 #with specific access
 
 **1. EC2 access :** It is virtual machine
