@@ -221,7 +221,7 @@ This **YouTube Sentiment Analysis** project is a comprehensive **MLOps pipeline*
 conda create -n youtube python=3.11 -y 
 conda activate youtube
 pip install -r requirements.txt
-
+```
 
 ## 2. Data Version Control (DVC)
 ```bash
