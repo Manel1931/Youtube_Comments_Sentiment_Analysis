@@ -7,6 +7,7 @@ import string
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import logging
+import json
 
 # =========================
 # Logging configuration
@@ -37,59 +38,61 @@ nltk.download('stopwords')
 # Functions
 # =========================
 
-def preprocess_comment(comment):
-    """
-    Apply preprocessing transformations to a comment:
-    - Lowercasing
-    - Strip whitespaces
-    - Remove newlines
-    - Keep only alphanumeric and basic punctuation
-    - Remove stopwords (except key sentiment words)
-    - Lemmatization
-    """
+def preprocess_comment(comment: str) -> str:
+    """Preprocess a single comment for modeling."""
     try:
         comment = comment.lower().strip()
         comment = re.sub(r'\n', ' ', comment)
         comment = re.sub(r'[^A-Za-z0-9\s!?.,]', '', comment)
 
-        # Keep important sentiment words
         stop_words = set(stopwords.words('english')) - {'not', 'but', 'however', 'no', 'yet'}
         comment = ' '.join([word for word in comment.split() if word not in stop_words])
 
-        # Lemmatize words
         lemmatizer = WordNetLemmatizer()
         comment = ' '.join([lemmatizer.lemmatize(word) for word in comment.split()])
 
         return comment
     except Exception as e:
         logger.error(f"Error in preprocessing comment: {e}")
-        return comment  # Return original comment if preprocessing fails
+        return comment
 
-def normalize_text(df):
-    """
-    Apply preprocessing to the 'clean_comment' column of a dataframe.
-    """
+def normalize_text(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply preprocessing to the 'clean_comment' column."""
     try:
+        if 'clean_comment' not in df.columns:
+            raise KeyError("Column 'clean_comment' missing from dataframe")
         df['clean_comment'] = df['clean_comment'].apply(preprocess_comment)
-        logger.debug('Text normalization completed')
+        df['comment_length'] = df['clean_comment'].apply(len)  # New feature
+        logger.debug(f'Text normalization completed. Sample lengths: {df["comment_length"].head()}')
         return df
     except Exception as e:
         logger.error(f"Error during text normalization: {e}")
         raise
 
 def save_data(train_data: pd.DataFrame, test_data: pd.DataFrame, data_path: str) -> None:
-    """
-    Save processed train and test datasets into data/interim.
-    """
+    """Save processed datasets and preprocessing stats."""
     try:
         interim_data_path = os.path.join(data_path, 'interim')
         os.makedirs(interim_data_path, exist_ok=True)
-        logger.debug(f"Directory {interim_data_path} ready")
+        train_path = os.path.join(interim_data_path, "train_processed.csv")
+        test_path = os.path.join(interim_data_path, "test_processed.csv")
 
-        train_data.to_csv(os.path.join(interim_data_path, "train_processed.csv"), index=False)
-        test_data.to_csv(os.path.join(interim_data_path, "test_processed.csv"), index=False)
+        train_data.to_csv(train_path, index=False)
+        test_data.to_csv(test_path, index=False)
+        logger.debug(f"Processed data saved: {train_path} & {test_path}")
 
-        logger.debug(f"Processed data saved to {interim_data_path}")
+        # Save preprocessing statistics
+        stats = {
+            "train_size": len(train_data),
+            "test_size": len(test_data),
+            "avg_train_comment_length": train_data['comment_length'].mean(),
+            "avg_test_comment_length": test_data['comment_length'].mean()
+        }
+        stats_path = os.path.join(interim_data_path, "preprocessing_stats.json")
+        with open(stats_path, 'w') as f:
+            json.dump(stats, f, indent=4)
+        logger.debug(f"Preprocessing stats saved at {stats_path}")
+
     except Exception as e:
         logger.error(f"Error occurred while saving data: {e}")
         raise
@@ -102,20 +105,16 @@ def main():
     try:
         logger.debug("Starting data preprocessing...")
 
-        # Load raw datasets
         train_data = pd.read_csv('./data/raw/train.csv')
         test_data = pd.read_csv('./data/raw/test.csv')
         logger.debug('Raw data loaded successfully')
 
-        # Apply preprocessing
-        train_processed_data = normalize_text(train_data)
-        test_processed_data = normalize_text(test_data)
+        train_processed = normalize_text(train_data)
+        test_processed = normalize_text(test_data)
 
-        # Save processed datasets
-        save_data(train_processed_data, test_processed_data, data_path='./data')
+        save_data(train_processed, test_processed, data_path='./data')
 
         logger.info("Data preprocessing completed successfully.")
-
     except Exception as e:
         logger.error(f'Failed to complete the data preprocessing process: {e}')
         print(f"Error: {e}")

@@ -53,7 +53,7 @@ def load_data(file_path: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(file_path)
         df.fillna('', inplace=True)
-        logger.debug(f'Data loaded from {file_path} (NaNs filled)')
+        logger.debug(f'Data loaded from {file_path} (NaNs filled, shape: {df.shape})')
         return df
     except Exception as e:
         logger.error(f'Error loading data from {file_path}: {e}')
@@ -78,11 +78,15 @@ def apply_tfidf(train_data: pd.DataFrame, max_features: int, ngram_range: tuple)
 
         # Save the vectorizer to the root directory
         vectorizer_path = os.path.join(get_root_directory(), 'tfidf_vectorizer.pkl')
+        os.makedirs(os.path.dirname(vectorizer_path), exist_ok=True)
         with open(vectorizer_path, 'wb') as f:
             pickle.dump(vectorizer, f)
         logger.debug(f'TF-IDF vectorizer saved at {vectorizer_path}')
 
         return X_train_tfidf, y_train
+    except KeyError as e:
+        logger.error(f'Missing column in training data: {e}')
+        raise
     except Exception as e:
         logger.error(f'Error during TF-IDF transformation: {e}')
         raise
@@ -95,7 +99,7 @@ def train_lgbm(X_train: np.ndarray, y_train: np.ndarray, learning_rate: float, m
     try:
         model = lgb.LGBMClassifier(
             objective='multiclass',
-            num_class=3,
+            num_class=len(np.unique(y_train)),
             metric='multi_logloss',
             is_unbalance=True,
             class_weight='balanced',
@@ -118,6 +122,7 @@ def train_lgbm(X_train: np.ndarray, y_train: np.ndarray, learning_rate: float, m
 def save_model(model, file_path: str) -> None:
     """Persist the trained model to disk."""
     try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'wb') as f:
             pickle.dump(model, f)
         logger.debug(f'Model saved successfully at {file_path}')

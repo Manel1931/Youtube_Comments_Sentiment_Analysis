@@ -55,6 +55,7 @@ def load_data(data_url: str) -> pd.DataFrame:
     try:
         df = pd.read_csv(data_url)
         logger.debug(f'Data loaded from {data_url} with shape {df.shape}')
+        print(f"[INFO] Dataset loaded. Number of rows: {df.shape[0]}, columns: {df.shape[1]}")
         return df
     except pd.errors.ParserError as e:
         logger.error(f'Failed to parse the CSV file: {e}')
@@ -69,13 +70,17 @@ def preprocess_data(df: pd.DataFrame) -> pd.DataFrame:
     - Remove missing values
     - Remove duplicates
     - Remove rows with empty 'clean_comment'
+    - Reset index
     """
     try:
+        initial_shape = df.shape
         df.dropna(inplace=True)
         df.drop_duplicates(inplace=True)
         df = df[df['clean_comment'].str.strip() != '']
+        df.reset_index(drop=True, inplace=True)
         
-        logger.debug(f'Data preprocessing completed. Final shape: {df.shape}')
+        logger.debug(f'Data preprocessing completed. Initial shape: {initial_shape}, Final shape: {df.shape}')
+        print(f"[INFO] Preprocessing done. Removed {initial_shape[0] - df.shape[0]} rows.")
         return df
     except KeyError as e:
         logger.error(f'Missing column in the dataframe: {e}')
@@ -93,10 +98,15 @@ def save_data(train_data: pd.DataFrame, test_data: pd.DataFrame, data_path: str)
         raw_data_path = os.path.join(data_path, 'raw')
         os.makedirs(raw_data_path, exist_ok=True)
         
-        train_data.to_csv(os.path.join(raw_data_path, "train.csv"), index=False)
-        test_data.to_csv(os.path.join(raw_data_path, "test.csv"), index=False)
+        train_path = os.path.join(raw_data_path, "train.csv")
+        test_path = os.path.join(raw_data_path, "test.csv")
+        
+        train_data.to_csv(train_path, index=False)
+        test_data.to_csv(test_path, index=False)
         
         logger.debug(f'Train and test data saved to {raw_data_path}')
+        print(f"[INFO] Train data saved to {train_path}")
+        print(f"[INFO] Test data saved to {test_path}")
     except Exception as e:
         logger.error(f'Unexpected error occurred while saving the data: {e}')
         raise
@@ -107,29 +117,42 @@ def save_data(train_data: pd.DataFrame, test_data: pd.DataFrame, data_path: str)
 
 def main():
     try:
+        # ======================
         # Load parameters
+        # ======================
         root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
         params = load_params(os.path.join(root_dir, 'params.yaml'))
         test_size = params['data_ingestion']['test_size']
         
+        # ======================
         # Load raw data
+        # ======================
         df = load_data(
             data_url='https://raw.githubusercontent.com/Himanshu-1703/reddit-sentiment-analysis/refs/heads/main/data/reddit.csv'
         )
         
+        # ======================
         # Preprocess
+        # ======================
         df_clean = preprocess_data(df)
         
+        # ======================
         # Split into train and test sets
+        # ======================
         train_data, test_data = train_test_split(df_clean, test_size=test_size, random_state=42)
+        logger.debug(f'Train/Test split done. Train shape: {train_data.shape}, Test shape: {test_data.shape}')
+        print(f"[INFO] Train/Test split completed. Train rows: {train_data.shape[0]}, Test rows: {test_data.shape[0]}")
         
+        # ======================
         # Save the datasets
+        # ======================
         save_data(train_data, test_data, os.path.join(root_dir, 'data'))
         
         logger.info('Data ingestion process completed successfully.')
+        print("[SUCCESS] Data ingestion completed!")
     except Exception as e:
         logger.error(f'Failed to complete the data ingestion process: {e}')
-        print(f"Error: {e}")
+        print(f"[ERROR] {e}")
 
 if __name__ == '__main__':
     main()
