@@ -1,4 +1,3 @@
-
 import numpy as np
 import pandas as pd
 import os
@@ -8,16 +7,19 @@ import string
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import logging
+import json
 
-# logging configuration
+# =========================
+# Logging configuration
+# =========================
 logger = logging.getLogger('data_preprocessing')
-logger.setLevel('DEBUG')
+logger.setLevel(logging.DEBUG)
 
 console_handler = logging.StreamHandler()
-console_handler.setLevel('DEBUG')
+console_handler.setLevel(logging.DEBUG)
 
 file_handler = logging.FileHandler('preprocessing_errors.log')
-file_handler.setLevel('ERROR')
+file_handler.setLevel(logging.ERROR)
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
@@ -26,31 +28,26 @@ file_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
-# Download required NLTK data
+# =========================
+# NLTK resources
+# =========================
 nltk.download('wordnet')
 nltk.download('stopwords')
 
-# Define the preprocessing function
-def preprocess_comment(comment):
-    """Apply preprocessing transformations to a comment."""
+# =========================
+# Functions
+# =========================
+
+def preprocess_comment(comment: str) -> str:
+    """Preprocess a single comment for modeling."""
     try:
-        # Convert to lowercase
-        comment = comment.lower()
-
-        # Remove trailing and leading whitespaces
-        comment = comment.strip()
-
-        # Remove newline characters
+        comment = comment.lower().strip()
         comment = re.sub(r'\n', ' ', comment)
-
-        # Remove non-alphanumeric characters, except punctuation
         comment = re.sub(r'[^A-Za-z0-9\s!?.,]', '', comment)
 
-        # Remove stopwords but retain important ones for sentiment analysis
         stop_words = set(stopwords.words('english')) - {'not', 'but', 'however', 'no', 'yet'}
         comment = ' '.join([word for word in comment.split() if word not in stop_words])
 
-        # Lemmatize the words
         lemmatizer = WordNetLemmatizer()
         comment = ' '.join([lemmatizer.lemmatize(word) for word in comment.split()])
 
@@ -59,50 +56,67 @@ def preprocess_comment(comment):
         logger.error(f"Error in preprocessing comment: {e}")
         return comment
 
-def normalize_text(df):
-    """Apply preprocessing to the text data in the dataframe."""
+def normalize_text(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply preprocessing to the 'clean_comment' column."""
     try:
+        if 'clean_comment' not in df.columns:
+            raise KeyError("Column 'clean_comment' missing from dataframe")
         df['clean_comment'] = df['clean_comment'].apply(preprocess_comment)
-        logger.debug('Text normalization completed')
+        df['comment_length'] = df['clean_comment'].apply(len)  # New feature
+        logger.debug(f'Text normalization completed. Sample lengths: {df["comment_length"].head()}')
         return df
     except Exception as e:
         logger.error(f"Error during text normalization: {e}")
         raise
 
 def save_data(train_data: pd.DataFrame, test_data: pd.DataFrame, data_path: str) -> None:
-    """Save the processed train and test datasets."""
+    """Save processed datasets and preprocessing stats."""
     try:
         interim_data_path = os.path.join(data_path, 'interim')
-        logger.debug(f"Creating directory {interim_data_path}")
-        
-        os.makedirs(interim_data_path, exist_ok=True)  # Ensure the directory is created
-        logger.debug(f"Directory {interim_data_path} created or already exists")
+        os.makedirs(interim_data_path, exist_ok=True)
+        train_path = os.path.join(interim_data_path, "train_processed.csv")
+        test_path = os.path.join(interim_data_path, "test_processed.csv")
 
-        train_data.to_csv(os.path.join(interim_data_path, "train_processed.csv"), index=False)
-        test_data.to_csv(os.path.join(interim_data_path, "test_processed.csv"), index=False)
-        
-        logger.debug(f"Processed data saved to {interim_data_path}")
+        train_data.to_csv(train_path, index=False)
+        test_data.to_csv(test_path, index=False)
+        logger.debug(f"Processed data saved: {train_path} & {test_path}")
+
+        # Save preprocessing statistics
+        stats = {
+            "train_size": len(train_data),
+            "test_size": len(test_data),
+            "avg_train_comment_length": train_data['comment_length'].mean(),
+            "avg_test_comment_length": test_data['comment_length'].mean()
+        }
+        stats_path = os.path.join(interim_data_path, "preprocessing_stats.json")
+        with open(stats_path, 'w') as f:
+            json.dump(stats, f, indent=4)
+        logger.debug(f"Preprocessing stats saved at {stats_path}")
+
     except Exception as e:
         logger.error(f"Error occurred while saving data: {e}")
         raise
 
+# =========================
+# Main execution
+# =========================
+
 def main():
     try:
         logger.debug("Starting data preprocessing...")
-        
-        # Fetch the data from data/raw
+
         train_data = pd.read_csv('./data/raw/train.csv')
         test_data = pd.read_csv('./data/raw/test.csv')
-        logger.debug('Data loaded successfully')
+        logger.debug('Raw data loaded successfully')
 
-        # Preprocess the data
-        train_processed_data = normalize_text(train_data)
-        test_processed_data = normalize_text(test_data)
+        train_processed = normalize_text(train_data)
+        test_processed = normalize_text(test_data)
 
-        # Save the processed data
-        save_data(train_processed_data, test_processed_data, data_path='./data')
+        save_data(train_processed, test_processed, data_path='./data')
+
+        logger.info("Data preprocessing completed successfully.")
     except Exception as e:
-        logger.error('Failed to complete the data preprocessing process: %s', e)
+        logger.error(f'Failed to complete the data preprocessing process: {e}')
         print(f"Error: {e}")
 
 if __name__ == '__main__':
