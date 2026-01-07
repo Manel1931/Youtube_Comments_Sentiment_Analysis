@@ -2,10 +2,10 @@
 # model_evaluation.py
 # =============================================================================
 # Évaluation du modèle LightGBM sur les commentaires YouTube.
-# Inclut :
-# - Chargement des données et du modèle
-# - Transformation TF-IDF
-# - Évaluation et logging (classification report + matrice de confusion)
+# Fonctions principales :
+# - Chargement des données, modèle et vectorizer TF-IDF
+# - Transformation TF-IDF des textes de test
+# - Évaluation du modèle avec classification report et matrice de confusion
 # - Sauvegarde des artefacts et informations du run MLflow
 # =============================================================================
 
@@ -27,19 +27,24 @@ from mlflow.models import infer_signature
 # -----------------------------
 # Configuration logging
 # -----------------------------
+# Logger pour suivre les événements et erreurs du script
 logger = logging.getLogger('model_evaluation')
 logger.setLevel(logging.DEBUG)
 
+# Affichage des logs sur la console (niveau INFO)
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 
+# Enregistrement des erreurs critiques dans un fichier
 file_handler = logging.FileHandler('model_evaluation_errors.log')
 file_handler.setLevel(logging.ERROR)
 
+# Format standard des messages
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
 
+# Ajout des handlers au logger principal
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
@@ -47,6 +52,10 @@ logger.addHandler(file_handler)
 # Fonctions utilitaires
 # -----------------------------
 def safe_load_csv(file_path: str) -> pd.DataFrame:
+    """
+    Chargement sécurisé d'un fichier CSV.
+    Remplace les valeurs manquantes par des chaînes vides.
+    """
     if not os.path.exists(file_path):
         logger.error(f"CSV file not found: {file_path}")
         raise FileNotFoundError(file_path)
@@ -56,6 +65,10 @@ def safe_load_csv(file_path: str) -> pd.DataFrame:
     return df
 
 def safe_load_pickle(file_path: str):
+    """
+    Chargement sécurisé d'un fichier pickle.
+    Retourne l'objet Python désérialisé.
+    """
     if not os.path.exists(file_path):
         logger.error(f"Pickle file not found: {file_path}")
         raise FileNotFoundError(file_path)
@@ -65,6 +78,10 @@ def safe_load_pickle(file_path: str):
     return obj
 
 def safe_load_yaml(file_path: str) -> dict:
+    """
+    Chargement sécurisé d'un fichier YAML.
+    Retourne un dictionnaire contenant les paramètres.
+    """
     if not os.path.exists(file_path):
         logger.error(f"YAML file not found: {file_path}")
         raise FileNotFoundError(file_path)
@@ -74,13 +91,21 @@ def safe_load_yaml(file_path: str) -> dict:
     return params
 
 def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray):
+    """
+    Évalue le modèle LightGBM sur un jeu de test.
+    Retourne le rapport de classification et la matrice de confusion.
+    """
     y_pred = model.predict(X_test)
     report = classification_report(y_test, y_pred, output_dict=True)
     cm = confusion_matrix(y_test, y_pred)
     logger.info("Model evaluation done")
     return report, cm
 
-def log_confusion_matrix(cm, dataset_name):
+def log_confusion_matrix(cm, dataset_name: str):
+    """
+    Génère et sauvegarde la matrice de confusion en heatmap.
+    La matrice est également loggée dans MLflow.
+    """
     os.makedirs('reports', exist_ok=True)
     plt.figure(figsize=(8,6))
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
@@ -94,6 +119,9 @@ def log_confusion_matrix(cm, dataset_name):
     logger.info(f"Confusion matrix saved at {cm_path}")
 
 def save_model_info(run_id: str, model_path: str, file_path: str):
+    """
+    Sauvegarde les informations du run MLflow et du modèle dans un fichier JSON.
+    """
     model_info = {"run_id": run_id, "model_path": model_path}
     with open(file_path, 'w') as f:
         json.dump(model_info, f, indent=4)
@@ -103,41 +131,49 @@ def save_model_info(run_id: str, model_path: str, file_path: str):
 # Fonction principale
 # -----------------------------
 def main():
+    """
+    Orchestration complète de l'évaluation :
+    - Chargement des paramètres et log dans MLflow
+    - Chargement du modèle et vectorizer TF-IDF
+    - Transformation TF-IDF des données de test
+    - Évaluation et logging des métriques et artefacts
+    """
     mlflow.set_tracking_uri("http://localhost:5000")
     mlflow.set_experiment('dvc-pipeline-runs')
 
     with mlflow.start_run() as run:
         try:
+            # Détermination du répertoire racine
             root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 
-            # Charger paramètres
+            # Charger paramètres et log dans MLflow
             params = safe_load_yaml(os.path.join(root_dir, 'params.yaml'))
             for key, val in params.items():
                 mlflow.log_param(key, val)
 
-            # Charger modèle et TF-IDF
+            # Charger modèle et TF-IDF vectorizer
             model = safe_load_pickle(os.path.join(root_dir, 'lgbm_model.pkl'))
             vectorizer = safe_load_pickle(os.path.join(root_dir, 'tfidf_vectorizer.pkl'))
 
-            # Charger données test
+            # Charger données de test
             test_data = safe_load_csv(os.path.join(root_dir, 'data/interim/test_processed.csv'))
             X_test_tfidf = vectorizer.transform(test_data['clean_comment'].values)
             y_test = test_data['category'].values
 
-            # Signature et log modèle MLflow
+            # Créer signature et log modèle MLflow
             input_example = pd.DataFrame(X_test_tfidf.toarray()[:5], columns=vectorizer.get_feature_names_out())
             signature = infer_signature(input_example, model.predict(X_test_tfidf[:5]))
             mlflow.sklearn.log_model(model, "lgbm_model", signature=signature, input_example=input_example)
             mlflow.log_artifact(os.path.join(root_dir, 'tfidf_vectorizer.pkl'))
 
-            # Sauvegarder info run
+            # Sauvegarder les informations du run
             save_model_info(run.info.run_id, "lgbm_model", 'experiment_info.json')
 
-            # Évaluation modèle
+            # Évaluation du modèle
             report, cm = evaluate_model(model, X_test_tfidf, y_test)
             log_confusion_matrix(cm, "Test_Data")
 
-            # Log métriques
+            # Log métriques par classe dans MLflow
             for label, metrics in report.items():
                 if isinstance(metrics, dict):
                     mlflow.log_metrics({
@@ -146,7 +182,7 @@ def main():
                         f"test_{label}_f1-score": metrics['f1-score']
                     })
 
-            # Tags MLflow
+            # Ajout de tags descriptifs dans MLflow
             mlflow.set_tag("model_type", "LightGBM")
             mlflow.set_tag("task", "Sentiment Analysis")
             mlflow.set_tag("dataset", "YouTube Comments")

@@ -1,9 +1,12 @@
 # =============================================================================
 # register_model.py
 # =============================================================================
-# Script pour enregistrer un modèle MLflow dans le Model Registry.
-# Charge les infos du modèle depuis un JSON, enregistre dans MLflow,
-# et passe le modèle en "Staging" (ou Production si besoin).
+# Script pour enregistrer un modèle dans MLflow Model Registry.
+# Étapes principales :
+# - Charger les informations du modèle depuis un JSON
+# - Enregistrer le modèle dans MLflow
+# - Passer le modèle à l'étape spécifiée (Staging ou Production)
+# - Sauvegarder un log local des enregistrements
 # =============================================================================
 
 import json
@@ -15,7 +18,8 @@ from mlflow.exceptions import MlflowException
 # -----------------------------
 # Configuration MLflow
 # -----------------------------
-mlflow.set_tracking_uri("http://localhost:5000")  # URI du serveur MLflow
+# Définition de l'URI du serveur MLflow
+mlflow.set_tracking_uri("http://localhost:5000")
 
 # -----------------------------
 # Configuration du logging
@@ -23,25 +27,37 @@ mlflow.set_tracking_uri("http://localhost:5000")  # URI du serveur MLflow
 logger = logging.getLogger('model_registration')
 logger.setLevel(logging.DEBUG)
 
+# Affichage des logs sur la console
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 
+# Enregistrement des erreurs critiques dans un fichier
 file_handler = logging.FileHandler('model_registration_errors.log')
 file_handler.setLevel(logging.ERROR)
 
+# Format standard des messages
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 file_handler.setFormatter(formatter)
 
+# Ajout des handlers au logger principal
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
+
 
 # -----------------------------
 # Fonctions utilitaires
 # -----------------------------
-
 def load_model_info(file_path: str) -> dict:
-    """Charge les informations du modèle depuis un fichier JSON."""
+    """
+    Chargement sécurisé des informations du modèle depuis un fichier JSON.
+
+    Args:
+        file_path (str): Chemin vers le fichier JSON contenant 'run_id' et 'model_path'.
+
+    Returns:
+        dict: Dictionnaire avec les informations du modèle.
+    """
     if not os.path.exists(file_path):
         logger.error(f'File not found: {file_path}')
         raise FileNotFoundError(f"{file_path} does not exist.")
@@ -60,17 +76,19 @@ def load_model_info(file_path: str) -> dict:
 
 def register_model(model_name: str, model_info: dict, stage: str = "Staging"):
     """
-    Enregistre le modèle dans le MLflow Model Registry et le passe à l'étape spécifiée.
-    
+    Enregistre un modèle dans MLflow Model Registry et le passe à l'étape spécifiée.
+
     Args:
-        model_name (str): Nom du modèle.
+        model_name (str): Nom du modèle dans MLflow.
         model_info (dict): Dictionnaire contenant 'run_id' et 'model_path'.
-        stage (str): Etape dans MLflow ("Staging" ou "Production").
+        stage (str): Étape MLflow souhaitée ("Staging" ou "Production").
     """
     try:
+        # Construction de l'URI du modèle pour MLflow
         model_uri = f"runs:/{model_info['run_id']}/{model_info['model_path']}"
         model_version = mlflow.register_model(model_uri, model_name)
 
+        # Passage du modèle à l'étape spécifiée
         client = mlflow.tracking.MlflowClient()
         client.transition_model_version_stage(
             name=model_name,
@@ -79,7 +97,7 @@ def register_model(model_name: str, model_info: dict, stage: str = "Staging"):
         )
         logger.info(f'Model "{model_name}" version {model_version.version} registered and moved to {stage}.')
 
-        # Save local log of registration
+        # Enregistrement local des informations d'enregistrement pour traçabilité
         log_path = 'registered_models_log.json'
         log_entry = {
             "model_name": model_name,
@@ -104,10 +122,16 @@ def register_model(model_name: str, model_info: dict, stage: str = "Staging"):
         logger.error(f"Unexpected error during model registration: {e}")
         raise
 
+
 # -----------------------------
 # Fonction principale
 # -----------------------------
 def main():
+    """
+    Orchestration principale pour l'enregistrement d'un modèle :
+    - Charger le JSON avec les infos du modèle
+    - Enregistrer le modèle dans MLflow et le passer en Staging
+    """
     try:
         model_info_path = 'experiment_info.json'
         model_info = load_model_info(model_info_path)
